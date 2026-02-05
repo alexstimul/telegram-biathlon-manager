@@ -1,26 +1,17 @@
 import { Pool } from "pg";
-
-function must(name: string): string {
-    const value = process.env[name];
-    if (!value) {
-        console.error(`❌ ${name} is not set. Add it to .env`);
-        process.exit(1);
-    }
-
-    return value;
-}
+import { config } from "./config";
 
 export const pool = new Pool({
-    host: must("PGHOST"),
-    port: Number(must("PGPORT")),
-    database: must("PGDATABASE"),
-    user: must("PGUSER"),
-    password: must("PGPASSWORD"),
-    ssl: { rejectUnauthorized: false },
+    host: config.db.host,
+    port: config.db.port,
+    database: config.db.database,
+    user: config.db.user,
+    password: config.db.password,
+    ssl: config.db.sslMode === "require" ? { rejectUnauthorized: false } : undefined,
     max: 3,
     idleTimeoutMillis: 30_000,
     connectionTimeoutMillis: 10_000,
-});
+})
 
 async function tableExist(tableName: string): Promise<boolean> {
     const res = await pool.query<{ reg: string | null }>(
