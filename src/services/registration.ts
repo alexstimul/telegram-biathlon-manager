@@ -1,27 +1,27 @@
-import type { PoolClient } from "pg";
-import { pool } from "../db";
+import type { PoolClient } from "pg"
+import { pool } from "../db"
 
 type RegistrationResult = {
-    isNewUser: boolean;
-    userId: string;
-    managerId: string;
-    athleteId: string;
-};
+    isNewUser: boolean
+    userId: string
+    managerId: string
+    athleteId: string
+}
 
 function clamp(min: number, max: number, value: number): number {
-    return Math.max(min, Math.min(value, max));
+    return Math.max(min, Math.min(value, max))
 }
 
 function randInt(min: number, max: number): number {
-    return Math.floor(Math.random() * (max - min + 1)) + min;
+    return Math.floor(Math.random() * (max - min + 1)) + min
 }
 
 function generateAthleteSeedStats() {
     // MVP: стартовые статы вокруг 50 с небольшим разбором, чтобы не было дизбаланса
-    const base = 50;
-    const spread = 8;
+    const base = 50
+    const spread = 8
 
-    const stat = () => clamp(35, 65, base + randInt(-spread, spread));
+    const stat = () => clamp(35, 65, base + randInt(-spread, spread))
 
     return {
         age: randInt(18, 24),
@@ -37,18 +37,18 @@ function generateAthleteSeedStats() {
         consistency: stat(),
         form: clamp(40, 60, 50 + randInt(-6, 6)),
         fatigue: 0,
-        injury_level: 0,
-    };
+        injury_level: 0
+    }
 }
 
 async function ensureUser(
     client: PoolClient,
     telegramId: number,
-    username: string | null,
+    username: string | null
 ) {
     const res = await client.query<{
-        id: string;
-        inserted: boolean;
+        id: string
+        inserted: boolean
     }>(
         `
     insert into public.users (telegram_id, username)
@@ -57,13 +57,13 @@ async function ensureUser(
       set username = excluded.username
     returning id, (xmax = 0) as inserted
     `,
-        [telegramId, username],
-    );
+        [telegramId, username]
+    )
 
-    const row = res.rows[0];
-    if (!row) throw new Error("Failed to upsert user");
+    const row = res.rows[0]
+    if (!row) throw new Error("Failed to upsert user")
 
-    return { userId: row.id, isNewUser: row.inserted };
+    return { userId: row.id, isNewUser: row.inserted }
 }
 
 async function ensureManager(client: PoolClient, userId: string) {
@@ -75,17 +75,17 @@ async function ensureManager(client: PoolClient, userId: string) {
       set user_id = excluded.user_id
     returning id
     `,
-        [userId],
-    );
+        [userId]
+    )
 
-    const row = res.rows[0];
-    if (!row) throw new Error("Failed to upsert manager");
+    const row = res.rows[0]
+    if (!row) throw new Error("Failed to upsert manager")
 
-    return { managerId: row.id };
+    return { managerId: row.id }
 }
 
 async function ensureAthlete(client: PoolClient, managerId: string) {
-    const seed = generateAthleteSeedStats();
+    const seed = generateAthleteSeedStats()
 
     const res = await client.query<{ id: string }>(
         `
@@ -122,41 +122,41 @@ async function ensureAthlete(client: PoolClient, managerId: string) {
             seed.consistency,
             seed.form,
             seed.fatigue,
-            seed.injury_level,
-        ],
-    );
+            seed.injury_level
+        ]
+    )
 
-    const row = res.rows[0];
-    if (!row) throw new Error("Failed to upsert athlete");
+    const row = res.rows[0]
+    if (!row) throw new Error("Failed to upsert athlete")
 
-    return { athleteId: row.id };
+    return { athleteId: row.id }
 }
 
 export async function registerOnStart(params: {
-    telegramId: number;
-    username: string | null;
+    telegramId: number
+    username: string | null
 }): Promise<RegistrationResult> {
-    const client = await pool.connect();
+    const client = await pool.connect()
 
     try {
-        await client.query("begin");
+        await client.query("begin")
 
         const { userId, isNewUser } = await ensureUser(
             client,
             params.telegramId,
-            params.username,
-        );
+            params.username
+        )
 
-        const { managerId } = await ensureManager(client, userId);
-        const { athleteId } = await ensureAthlete(client, managerId);
+        const { managerId } = await ensureManager(client, userId)
+        const { athleteId } = await ensureAthlete(client, managerId)
 
-        await client.query("commit");
+        await client.query("commit")
 
-        return { isNewUser, userId, managerId, athleteId };
+        return { isNewUser, userId, managerId, athleteId }
     } catch (e) {
-        await client.query("rollback");
-        throw e;
+        await client.query("rollback")
+        throw e
     } finally {
-        client.release();
+        client.release()
     }
 }
